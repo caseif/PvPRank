@@ -1,0 +1,55 @@
+// Apply Gradle plugins
+plugins {
+    id 'java'
+    id 'eclipse'
+    id 'idea'
+}
+
+defaultTasks 'clean', 'build'
+
+// Project information
+group = 'net.caseif.pvprank'
+version = '0.1'
+
+// Extended project information
+ext.projectName = 'MyProject'
+ext.description = 'Bukkit plugin for ranking players based on PvP stats.'
+ext.inceptionYear = '2012'
+ext.packaging = 'jar'
+
+sourceCompatibility = 1.7
+targetCompatibility = 1.7
+
+ext {
+    bukkit = 'org.bukkit:bukkit:1.8.8-R0.1-SNAPSHOT'
+}
+
+// Project repositories
+repositories {
+    maven { url 'http://hub.spigotmc.org/nexus/content/groups/public/' }
+}
+
+// Project dependencies
+dependencies {
+    compile bukkit
+}
+
+// Read source files using UTF-8
+tasks.withType(JavaCompile) {
+    options.encoding = 'UTF-8'
+}
+
+task sourceJar(type: Jar) {
+    from sourceSets.main.java
+    from sourceSets.main.resources
+    classifier = 'sources'
+}
+
+artifacts {
+    jar
+    sourceJar
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = '2.7'
+}
