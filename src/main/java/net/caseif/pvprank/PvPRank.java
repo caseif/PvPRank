@@ -1,8 +1,6 @@
-// apologies if this code is hard to read
 package net.caseif.pvprank;
 
 import java.io.File;
-import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -10,10 +8,8 @@ import java.sql.Statement;
 import java.util.logging.Logger;
 
 import org.bukkit.ChatColor;
-import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
@@ -21,31 +17,29 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class PvPRank extends JavaPlugin implements Listener {
-	static final Logger log = Logger.getLogger("Minecraft");
-	@Override
+
+	public final Logger log = Logger.getLogger("Minecraft");
+
 	public void onEnable(){
+		// register events
 		getServer().getPluginManager().registerEvents(this, this);
-		// set up the config
-		// * adding this in in a later update
-
-		// create the data folder
+		// create data folder
 		this.getDataFolder().mkdir();
-
-		// create the plugin table if it does not exist
+		// create data table
 		Connection conn = null;
 		Statement st = null;
-		try{
+		try {
 			Class.forName("org.sqlite.JDBC");
-			String dbPath = "jdbc:sqlite:" + this.getDataFolder() + File.separator + "PvPRank.db";
+			String dbPath = "jdbc:sqlite:" + this.getDataFolder() + File.separator + "players.db";
 			conn = DriverManager.getConnection(dbPath);
 			st = conn.createStatement();
 			st.executeUpdate("CREATE TABLE IF NOT EXISTS players (" +
 					"id INTEGER NOT NULL PRIMARY KEY," +
 					"username VARCHAR(20) NOT NULL," +
-					"kills INTEGER NOT NULL," +
-					"deaths INTEGER NOT NULL," +
-					"kdr DECIMAL NOT NULL," +
-					"rank INTEGER NOT NULL)");
+					"kills INTEGER DEFAULT '0' NOT NULL," +
+					"deaths INTEGER DEFAULT '0' NOT NULL," +
+					"kdr DECIMAL DEFAULT '0' NOT NULL," +
+					"rank INTEGER DEFAULT '0' NOT NULL)");
 		}
 		catch (Exception e){
 			e.printStackTrace();
@@ -61,169 +55,171 @@ public class PvPRank extends JavaPlugin implements Listener {
 		}
 		log.info(this + " has been enabled!");
 	}
+
 	public void onDisable(){
-		log.info(this + " has been disabled!");
+		log.info(this + "has been disabled!");
 	}
-	// trigger update when player is killed
-	@EventHandler(priority = EventPriority.MONITOR)
-	public void onDeath(PlayerDeathEvent e){
-		if (e.getEntityType() == EntityType.PLAYER){
-			Player pvictim = e.getEntity();
-			Player pkiller = pvictim.getKiller();
-			if (pkiller != null){
-				// get the connection
-				Connection conn = null;
-				ResultSet rs = null;
-				Statement st = null;
-				try{
-					String killer = pkiller.getDisplayName();
-					String victim = pvictim.getDisplayName();
-					Class.forName("org.sqlite.JDBC");
-					String dbPath = "jdbc:sqlite:" + this.getDataFolder() + File.separator + "PvPRank.db";
-					conn = DriverManager.getConnection(dbPath);
-					st = conn.createStatement();
 
-					// update the killers stats
-					// first the kills...
-					rs = st.executeQuery("SELECT kills FROM players WHERE username='" + killer + "'");
-					int irs = rs.getInt("kills");
-					int nrs = irs + 1;
-					st.executeUpdate("UPDATE players SET kills='" + nrs + "' WHERE username='" + killer + "'");
-					// ...then the kdr
-					rs = st.executeQuery("SELECT deaths FROM players WHERE username='" + killer + "'");
-					int drs = rs.getInt("deaths");
-					// avoid dividing by zero
-					if (drs == 0){
-						drs = 1;
-					}
-					int kkdr = nrs / drs;
-					st.executeUpdate("UPDATE players SET kdr='" + kkdr + "' WHERE username='" + killer + "'");
-
-					// update the victim's stats
-					// first the deaths...
-					rs = st.executeQuery("SELECT deaths FROM players WHERE username='" + victim + "'");
-					int jrs = rs.getInt("deaths");
-					int ors = jrs + 1;
-					st.executeUpdate("UPDATE players SET deaths='" + ors + "' WHERE username='" + victim + "'");
-					// ...then the kdr
-					rs = st.executeQuery("SELECT kills FROM players WHERE username='" + victim + "'");
-					int krs = rs.getInt("kills");
-					// avoid dividing by zero
-					if (ors == 0){
-						ors = 1;
-					}
-					int vkdr = krs / ors;
-					st.executeUpdate("UPDATE players SET kdr='" + vkdr + "' WHERE username='" + victim + "'");
-
-					// update everyone's rankings
-					ResultSet res = st.executeQuery("SELECT id, kdr FROM players");
-					while(res.next()) {
-						int id = res.getInt("id");
-						BigDecimal kdr = new BigDecimal(res.getString("kdr"));
-						rs = st.executeQuery("SELECT COUNT(*) FROM players WHERE kdr>'" + kdr + "'"); 
-						int hkdr = 1;
-						while (rs.next()){
-							hkdr = rs.getInt(1);
-						}
-						int rank1 = hkdr + 1;
-						st.executeUpdate("UPDATE players SET rank='" + rank1 + "' WHERE id='" + id + "'");
-					}
-				}
-				catch (Exception f){
-					f.printStackTrace();
-				}
-				finally {
-					try {
-						conn.close();
-					}
-					catch (Exception g){
-						g.printStackTrace();
-					}
-				}
-			}
-		}
+	@EventHandler
+	public void onPlayerJoin(PlayerJoinEvent e){
+		String p = e.getPlayer().getName();
+		insertPlayer(p);
 	}
-	// modify chat names
-	@SuppressWarnings("deprecation")
-	@EventHandler(priority = EventPriority.HIGHEST)
-	public void onPlayerChat(AsyncPlayerChatEvent event){
-		final Player p = event.getPlayer();
-		String pl = p.getDisplayName();
-		// get player's rank
-		Connection conn = null;
-		ResultSet rs = null;
-		Statement st = null;
-		try{
-			Class.forName("org.sqlite.JDBC");
-			String dbPath = "jdbc:sqlite:" + this.getDataFolder() + File.separator + "PvPRank.db";
-			conn = DriverManager.getConnection(dbPath);
-			st = conn.createStatement();
-			rs = st.executeQuery("SELECT rank FROM players WHERE username='" + pl + "'");
-			final int rank = rs.getInt("rank");
 
-			// retrieve rank format from config
-			// * adding this in in a later update
-
-			// add rank to username as suffix
-			if (!event.isCancelled()){
-				p.setDisplayName(p.getDisplayName() + ChatColor.BLUE + "[" + rank + "]" + ChatColor.WHITE);
-				this.getServer().getScheduler().scheduleAsyncDelayedTask(this, new Runnable(){
-					public void run(){
-						String name = p.getDisplayName();
-						name = name.replace(ChatColor.BLUE + "[" + rank + "]" + ChatColor.WHITE, "");
-						p.setDisplayName(name);
-					}
-				}, 1);
-			}
-		}
-		catch (Exception e){
-			e.printStackTrace();
-		}
-		finally { 
-			try {
-				rs.close();
-				st.close();
-				conn.close();
-			}
-			catch (Exception e){
-				e.printStackTrace();
-			}
-		}
-	}
-	// insert row when new player joins
-	@EventHandler(priority = EventPriority.MONITOR)
-	public void onPlayerJoin(PlayerJoinEvent event){
-		Player pl = event.getPlayer();
-		String player = pl.getDisplayName();
-		try {
+	@EventHandler
+	public void onPlayerKill(PlayerDeathEvent e){
+		String victim = e.getEntity().getName();
+		Player killerP = e.getEntity().getKiller();
+		if (killerP != null){
+			String killer = killerP.getName();
+			killerP = null;
 			Connection conn = null;
-			ResultSet rs = null;
 			Statement st = null;
-			Class.forName("org.sqlite.JDBC");
-			String dbPath = "jdbc:sqlite:" + this.getDataFolder() + File.separator + "PvPRank.db";
-			conn = DriverManager.getConnection(dbPath);
-			st = conn.createStatement();
-			rs = st.executeQuery("SELECT EXISTS(SELECT 1 FROM players WHERE username='" + player + "')");
-			int ex = rs.getInt(1);
-			if (ex == 0){
-				int rank = 1;
-				int count = 0;
-				ResultSet res = st.executeQuery("SELECT COUNT(*) FROM players");
-				while (res.next()){
-					count = res.getInt(1);
+			ResultSet rs = null;
+			try {
+				Class.forName("org.sqlite.JDBC");
+				String dbPath = "jdbc:sqlite:" + this.getDataFolder() + File.separator + "players.db";
+				conn = DriverManager.getConnection(dbPath);
+				st = conn.createStatement();
+				//check if both players are in the data table
+				insertPlayer(victim);
+				insertPlayer(killer);
+
+				// update stats
+				// update killer stats
+				rs = st.executeQuery("SELECT * FROM players WHERE username = '" + killer + "'");
+				int kKills = rs.getInt("kills") + 1;
+				int kDeaths = rs.getInt("deaths");
+				double kKdr = 0;
+				if (kDeaths != 0)
+					kKdr = (double)kKills / (double)kDeaths;
+				else
+					kKdr = kKills;
+				st.executeUpdate("UPDATE players SET kills = '" + kKills + "', kdr = '" + kKdr + "' WHERE username = '" + killer + "'");
+
+				// update victim stats
+				rs = st.executeQuery("SELECT * FROM players WHERE username = '" + victim + "'");
+				int vKills = rs.getInt("kills");
+				int vDeaths = rs.getInt("deaths") + 1;
+				double vKdr = 0;
+				if (vDeaths != 0)
+					vKdr = (double)vKills / (double)vDeaths;
+				else
+					vKdr = vKills;
+				st.executeUpdate("UPDATE players SET deaths = '" + vDeaths + "', kdr = '" + vKdr + "' WHERE username = '" + victim + "'");
+				
+				// update ranks
+				// killer
+				int kRank = 1;
+				rs = st.executeQuery("SELECT * FROM players WHERE kdr > '" + kKdr + "'");
+				while (rs.next()){
+					kRank += 1;
 				}
-				if (count != 0){
-					ResultSet rsrank = st.executeQuery("SELECT MAX(rank) FROM players");
-					rank = rsrank.getInt(1);
+				st.executeUpdate("UPDATE players SET rank = '" + kRank + "' WHERE username = '" + killer + "'");
+				// victim
+				int vRank = 1;
+				rs = st.executeQuery("SELECT * FROM players WHERE kdr > '" + vKdr + "'");
+				while (rs.next()){
+					vRank += 1;
 				}
-				st.executeUpdate("INSERT INTO players (username, kills, deaths, kdr, rank) VALUES ('" + player + "', 0, 0, 0.00, " + rank + ")");
+				st.executeUpdate("UPDATE players SET rank = '" + vRank + "' WHERE username = '" + victim + "'");
 			}
-		}
-		catch (Exception e){
-			e.printStackTrace();
+			catch (Exception ex){
+				ex.printStackTrace();
+			}
+			finally {
+				try {
+					conn.close();
+					st.close();
+					rs.close();
+				}
+				catch (Exception exc){
+					exc.printStackTrace();
+				}
+			}
 		}
 	}
 
-	// define onCommand method for config reload
-	// * adding this in a later update
+	@SuppressWarnings("deprecation")
+	@EventHandler
+	public void onPlayerChat(AsyncPlayerChatEvent e){
+		String p = e.getPlayer().getName();
+		insertPlayer(p);
+		Connection conn = null;
+		Statement st = null;
+		ResultSet rs = null;
+		try {
+			Class.forName("org.sqlite.JDBC");
+			String dbPath = "jdbc:sqlite:" + this.getDataFolder() + File.separator + "players.db";
+			conn = DriverManager.getConnection(dbPath);
+			st = conn.createStatement();
+			rs = st.executeQuery("SELECT * FROM players WHERE username = '" + p + "'");
+			final int rank = rs.getInt("rank");
+			final Player player = e.getPlayer();
+			e.getPlayer().setDisplayName(e.getPlayer().getDisplayName() + ChatColor.BLUE + "[" + rank + "]" + ChatColor.WHITE);
+			this.getServer().getScheduler().scheduleAsyncDelayedTask(this, new Runnable(){
+				public void run(){
+					String name = player.getDisplayName();
+					name = name.replace(ChatColor.BLUE + "[" + rank + "]" + ChatColor.WHITE, "");
+					player.setDisplayName(name);
+				}
+			}, 1);
+		}
+		catch (Exception ex){
+			ex.printStackTrace();
+		}
+		finally {
+			try {
+				conn.close();
+				st.close();
+				rs.close();
+			}
+			catch (Exception exc){
+				exc.printStackTrace();
+			}
+		}
+	}
+
+	public boolean insertPlayer(String p){
+		Connection conn = null;
+		Statement st = null;
+		ResultSet rs = null;
+		try {
+			Class.forName("org.sqlite.JDBC");
+			String dbPath = "jdbc:sqlite:" + this.getDataFolder() + File.separator + "players.db";
+			conn = DriverManager.getConnection(dbPath);
+			st = conn.createStatement();
+			// check if player is in database
+			rs = st.executeQuery("SELECT COUNT(*) FROM players WHERE username = '" + p + "'");
+			int i = 0;
+			while (rs.next()){
+				i = rs.getInt(1);
+			}
+			if (i == 0){
+				// player is not yet in database
+				log.info("[PvPRank] Player " + p + " not found in database. Attempting to add...");
+				rs = st.executeQuery("SELECT * FROM players WHERE kdr > '0'");
+				int j = 1;
+				while (rs.next()){
+					j += 1;
+				}
+				st.executeUpdate("INSERT INTO players (username, kills, deaths, kdr, rank) VALUES ('" + p + "', '0', '0', '0', '" + j + "')");
+			}
+		}
+		catch (Exception ex){
+			ex.printStackTrace();
+			return false;
+		}
+		finally {
+			try {
+				conn.close();
+				st.close();
+				rs.close();
+			}
+			catch (Exception exc){
+				exc.printStackTrace();
+			}
+		}
+		return true;
+	}
 }

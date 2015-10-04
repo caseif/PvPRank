@@ -1,3 +1,8 @@
 name: PvPRank
 main: net.caseif.pvprank.PvPRank
-version: 0.1
+version: 0.2
+commands:
+  pr:
+    reload:
+      description: Reloads the config.
+      usage: /pr reload
